@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building a Legal Research Tool for Indian Term Sheets — Jyotirmoy Nath</title>
+<meta name="description" content="A corporate lawyer on why generic AI tools get Indian law wrong, how a RAG-based term sheet playbook was built in two weeks, and what the constraints revealed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --olive:        #2D4A2D;
+    --olive-hover:  #243D24;
+    --olive-light:  #EEF3EE;
+    --olive-pale:   #F4F7F4;
+    --page:         #F8F7F4;
+    --white:        #FFFFFF;
+    --ink:          #1A1A18;
+    --ink2:         #3A3A38;
+    --muted:        #6B6B6A;
+    --border:       #E0DED8;
+    --border-strong:#C4C2BC;
+    --tag-bg:       #E4EDE4;
+    --tag-text:     #2D4A2D;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--page);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 48px; height: 60px;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 500; color: var(--olive);
+    text-decoration: none; letter-spacing: 0.01em;
+  }
+  .nav-logo-mark {
+    width: 28px; height: 28px; background: var(--olive);
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  }
+  .nav-logo-mark svg { width: 14px; height: 14px; fill: none; stroke: white; stroke-width: 2; }
+  .nav-back {
+    font-size: 13px; color: var(--muted); text-decoration: none;
+    display: flex; align-items: center; gap: 6px; transition: color 0.2s;
+  }
+  .nav-back:hover { color: var(--ink); }
+  .nav-back svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  /* ── ARTICLE HEADER ── */
+  .article-header {
+    background: var(--white); border-bottom: 0.5px solid var(--border);
+    padding: 72px 48px 56px;
+  }
+  .article-header-inner { max-width: 680px; margin: 0 auto; }
+  .article-chip {
+    display: inline-block;
+    background: var(--tag-bg); color: var(--tag-text);
+    font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 5px 14px; border-radius: 3px;
+    margin-bottom: 28px;
+  }
+  .article-header h1 {
+    font-family: 'Lora', serif;
+    font-size: 38px; font-weight: 500; line-height: 1.2;
+    letter-spacing: -0.01em; color: var(--ink);
+    margin-bottom: 20px;
+  }
+  .article-deck {
+    font-size: 18px; color: var(--muted); line-height: 1.7;
+    font-family: 'Lora', serif; font-style: italic;
+    margin-bottom: 36px; max-width: 580px;
+  }
+  .article-byline {
+    display: flex; align-items: center; gap: 14px;
+    padding-top: 24px; border-top: 0.5px solid var(--border);
+  }
+  .byline-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--tag-bg); border: 2px solid var(--olive);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 500; color: var(--olive);
+  }
+  .byline-name { font-size: 14px; font-weight: 500; color: var(--ink); }
+  .byline-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── ARTICLE BODY ── */
+  .article-body-wrap {
+    background: var(--white); padding: 0 48px 80px;
+  }
+  .article-body {
+    max-width: 640px; margin: 0 auto;
+    font-family: 'Lora', serif;
+    font-size: 18px; line-height: 1.85; color: var(--ink2);
+  }
+  .article-body p {
+    margin-bottom: 1.6em;
+  }
+  .article-body h2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--olive); margin: 2.5em 0 1em;
+    padding-top: 2em; border-top: 0.5px solid var(--border);
+  }
+  .article-body blockquote {
+    border-left: 2px solid var(--olive);
+    padding: 4px 0 4px 24px; margin: 2em 0;
+    font-style: italic; color: var(--ink);
+    font-size: 19px; line-height: 1.7;
+  }
+  .article-body strong {
+    font-weight: 600; color: var(--ink);
+  }
+
+  /* ── ARTICLE FOOTER ── */
+  .article-footer-strip {
+    background: var(--olive-pale); border-top: 0.5px solid var(--border);
+    padding: 48px; text-align: center;
+  }
+  .article-footer-strip p {
+    font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 20px;
+  }
+  .btn-primary {
+    display: inline-block;
+    background: var(--olive); color: var(--white);
+    font-size: 13px; font-weight: 500; padding: 12px 28px;
+    border-radius: 5px; text-decoration: none; letter-spacing: 0.01em;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--olive-hover); }
+
+  /* ── FOOTER ── */
+  footer {
+    background: #1E331E; padding: 28px 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .footer-logo { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); }
+  .footer-links { display: flex; gap: 24px; }
+  .footer-links a {
+    font-size: 12px; color: rgba(255,255,255,0.35);
+    text-decoration: none; transition: color 0.2s;
+  }
+  .footer-links a:hover { color: rgba(255,255,255,0.7); }
+  .footer-note { font-size: 12px; color: rgba(255,255,255,0.3); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .nav { padding: 0 20px; }
+    .article-header { padding: 48px 24px 40px; }
+    .article-header h1 { font-size: 28px; }
+    .article-deck { font-size: 16px; }
+    .article-body-wrap { padding: 0 24px 64px; }
+    .article-body { font-size: 17px; }
+    .article-footer-strip { padding: 40px 24px; }
+    footer { padding: 24px 20px; flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" role="navigation" aria-label="Site navigation">
+  <a href="index.html" class="nav-logo">
+    <div class="nav-logo-mark">
+      <svg viewBox="0 0 14 14" aria-hidden="true">
+        <rect x="1" y="1" width="5" height="5" rx="1"/>
+        <rect x="8" y="1" width="5" height="5" rx="1"/>
+        <rect x="1" y="8" width="5" height="5" rx="1"/>
+        <rect x="8" y="8" width="5" height="5" rx="1"/>
+      </svg>
+    </div>
+    Term Sheet Playbook
+  </a>
+  <a href="index.html" class="nav-back">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to site
+  </a>
+</nav>
+
+<!-- ARTICLE HEADER -->
+<header class="article-header">
+  <div class="article-header-inner">
+    <span class="article-chip">Indian VC Law · Corporate Practice</span>
+    <h1>Building a Legal Research Tool for Indian Term Sheets</h1>
+    <p class="article-deck">
+      Generic AI tools cite the wrong law. Junior associates are losing the preparation that used to come with foundational work.
+    </p>
+    <div class="article-byline">
+      <div class="byline-avatar" aria-label="Jyotirmoy Nath">JN</div>
+      <div>
+        <div class="byline-name">Jyotirmoy Nath</div>
+        <div class="byline-meta">Corporate Lawyer · 26 June 2026 · 5 min read</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ARTICLE BODY -->
+<div class="article-body-wrap">
+  <article class="article-body" aria-label="Article content">
+
+    <h2>Background</h2>
+
+    <p>
+      As AI absorbs routine junior work, legal associates are losing the learning that came with doing the foundational work themselves. Junior associates no longer get the opportunity to mark up term sheets, but they are still on calls and in negotiations. They are arriving without the preparation that marking up a term sheet used to force. That prior engagement with the document was where the real learning happened. Without it, observation replaces understanding.
+    </p>
+
+    <h2>The tool</h2>
+
+    <p>
+      A RAG-based legal research tool for Indian PE/VC term sheet negotiations, grounded in Companies Act 2013 and FEMA legislation. Junior associates can browse key clauses like liquidation preference, anti-dilution and drag-along, or query specific negotiating positions and get structured, India-specific answers covering founder and investor counsel perspectives, market practice, and red flags. The playbook handles the foundation and the lawyer handles everything above it.
+    </p>
+
+    <h2>How it was built</h2>
+
+    <p>
+      I built this in two weeks on the free version of Claude. No engineering background, no budget. I worked in sessions timed around the usage limits, starting at 8am, then again around 2pm, then in the evening.
+    </p>
+
+    <p>
+      The work ran in two parallel threads: one for the knowledge base, researching, curating, and encoding how Indian term sheet clauses are actually negotiated; and one for the front end, building an interface where the information is easy to find and read. Debugging happened by taking screenshots and dropping them into Claude chat.
+    </p>
+
+    <h2>Why RAG and not a general AI tool</h2>
+
+    <p>
+      Generic AI tools like ChatGPT or Claude sometimes reference UK or US law sources, cite outdated positions, or hallucinate market practice. For a corporate lawyer advising on an Indian funding round, that is a real risk. A retrieval-augmented generation approach with a controlled, India-specific knowledge base keeps the answers grounded. The scope is bounded by what is in the knowledge base.
+    </p>
+
+    <blockquote>
+      If a query falls outside the knowledge base, the tool says so clearly rather than guessing.
+    </blockquote>
+
+    <p>
+      That matters. A tool that acknowledges what it does not know is more useful to a practitioner than one that answers a question about Indian law by drawing on sources that were never about Indian law.
+    </p>
+
+    <h2>What comes next</h2>
+
+    <p>
+      The constraints here were deliberate. Free tools, no budget, two weeks. The knowledge base is limited to what I could research and encode alone. A version built on a firm's institutional knowledge would look different.
+    </p>
+
+  </article>
+</div>
+
+<!-- ARTICLE FOOTER STRIP -->
+<div class="article-footer-strip">
+  <p>
+    Want to try the playbook or discuss what it could look like at scale?<br>
+    Built for junior associates, early-stage founders, and practitioners who need India-grounded answers.
+  </p>
+  <a href="index.html#contact" class="btn-primary">Get in touch</a>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Term Sheet Playbook</div>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="https://termsheet-playbook.vercel.app/" target="_blank" rel="noopener">Demo</a>
+    <a href="index.html#contact">Contact</a>
+  </div>
+  <div class="footer-note">Built by a practitioner. Grounded in Indian law. Not legal advice. © 2026 Jyotirmoy Nath</div>
+</footer>
+
+</body>
+</html>
