@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building a Legal Research Tool for Indian Term Sheets — Jyotirmoy Nath</title>
+<meta name="description" content="A corporate lawyer on why generic AI tools get Indian law wrong, how a RAG-based term sheet playbook was built in two weeks, and the technical architecture that makes it work.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --olive:        #2D4A2D;
+    --olive-hover:  #243D24;
+    --olive-light:  #EEF3EE;
+    --olive-pale:   #F4F7F4;
+    --page:         #F8F7F4;
+    --white:        #FFFFFF;
+    --ink:          #1A1A18;
+    --ink2:         #3A3A38;
+    --muted:        #6B6B6A;
+    --border:       #E0DED8;
+    --border-strong:#C4C2BC;
+    --tag-bg:       #E4EDE4;
+    --tag-text:     #2D4A2D;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--page);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 48px; height: 60px;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 500; color: var(--olive);
+    text-decoration: none; letter-spacing: 0.01em;
+  }
+  .nav-logo-mark {
+    width: 28px; height: 28px; background: var(--olive);
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  }
+  .nav-logo-mark svg { width: 14px; height: 14px; fill: none; stroke: white; stroke-width: 2; }
+  .nav-back {
+    font-size: 13px; color: var(--muted); text-decoration: none;
+    display: flex; align-items: center; gap: 6px; transition: color 0.2s;
+  }
+  .nav-back:hover { color: var(--ink); }
+  .nav-back svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  /* ── ARTICLE HEADER ── */
+  .article-header {
+    background: var(--white); border-bottom: 0.5px solid var(--border);
+    padding: 72px 48px 56px;
+  }
+  .article-header-inner { max-width: 680px; margin: 0 auto; }
+  .article-chip {
+    display: inline-block;
+    background: var(--tag-bg); color: var(--tag-text);
+    font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 5px 14px; border-radius: 3px;
+    margin-bottom: 28px;
+  }
+  .article-header h1 {
+    font-family: 'Lora', serif;
+    font-size: 38px; font-weight: 500; line-height: 1.2;
+    letter-spacing: -0.01em; color: var(--ink);
+    margin-bottom: 20px;
+  }
+  .article-deck {
+    font-size: 18px; color: var(--muted); line-height: 1.7;
+    font-family: 'Lora', serif; font-style: italic;
+    margin-bottom: 36px; max-width: 580px;
+  }
+  .article-byline {
+    display: flex; align-items: center; gap: 14px;
+    padding-top: 24px; border-top: 0.5px solid var(--border);
+  }
+  .byline-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--tag-bg); border: 2px solid var(--olive);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 500; color: var(--olive);
+  }
+  .byline-name { font-size: 14px; font-weight: 500; color: var(--ink); }
+  .byline-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── ARTICLE BODY ── */
+  .article-body-wrap {
+    background: var(--white); padding: 0 48px 80px;
+  }
+  .article-body {
+    max-width: 640px; margin: 0 auto;
+    font-family: 'Lora', serif;
+    font-size: 18px; line-height: 1.85; color: var(--ink2);
+  }
+  .article-body p {
+    margin-bottom: 1.6em;
+  }
+  .article-body h2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--olive); margin: 2.5em 0 1em;
+    padding-top: 2em; border-top: 0.5px solid var(--border);
+  }
+  .article-body blockquote {
+    border-left: 2px solid var(--olive);
+    padding: 4px 0 4px 24px; margin: 2em 0;
+    font-style: italic; color: var(--ink);
+    font-size: 19px; line-height: 1.7;
+  }
+  .article-body strong {
+    font-weight: 600; color: var(--ink);
+  }
+  .article-body code {
+    font-family: 'Courier New', monospace;
+    background: var(--olive-pale); padding: 2px 6px; border-radius: 3px;
+    font-size: 16px; color: var(--olive);
+  }
+  .tech-box {
+    background: var(--olive-pale); border: 0.5px solid var(--border);
+    border-left: 3px solid var(--olive);
+    padding: 20px 24px; margin: 2em 0; border-radius: 4px;
+  }
+  .tech-box h3 {
+    font-size: 14px; font-weight: 600; color: var(--olive);
+    margin-bottom: 10px; font-family: 'Inter', sans-serif;
+  }
+  .tech-box p {
+    font-size: 15px; color: var(--ink2); line-height: 1.7; margin-bottom: 8px;
+  }
+  .tech-box p:last-child { margin-bottom: 0; }
+  .tech-list {
+    list-style: none;
+    margin: 1.2em 0;
+  }
+  .tech-list li {
+    margin-bottom: 12px; padding-left: 24px; position: relative;
+    font-size: 15px; line-height: 1.7; color: var(--ink2);
+  }
+  .tech-list li:before {
+    content: "▸"; position: absolute; left: 0; color: var(--olive); font-weight: 600;
+  }
+
+  /* ── ARTICLE FOOTER ── */
+  .article-footer-strip {
+    background: var(--olive-pale); border-top: 0.5px solid var(--border);
+    padding: 48px; text-align: center;
+  }
+  .article-footer-strip p {
+    font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 20px;
+  }
+  .btn-primary {
+    display: inline-block;
+    background: var(--olive); color: var(--white);
+    font-size: 13px; font-weight: 500; padding: 12px 28px;
+    border-radius: 5px; text-decoration: none; letter-spacing: 0.01em;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--olive-hover); }
+
+  /* ── FOOTER ── */
+  footer {
+    background: #1E331E; padding: 28px 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .footer-logo { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); }
+  .footer-links { display: flex; gap: 24px; }
+  .footer-links a {
+    font-size: 12px; color: rgba(255,255,255,0.35);
+    text-decoration: none; transition: color 0.2s;
+  }
+  .footer-links a:hover { color: rgba(255,255,255,0.7); }
+  .footer-note { font-size: 12px; color: rgba(255,255,255,0.3); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .nav { padding: 0 20px; }
+    .article-header { padding: 48px 24px 40px; }
+    .article-header h1 { font-size: 28px; }
+    .article-deck { font-size: 16px; }
+    .article-body-wrap { padding: 0 24px 64px; }
+    .article-body { font-size: 17px; }
+    .article-footer-strip { padding: 40px 24px; }
+    footer { padding: 24px 20px; flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" role="navigation" aria-label="Site navigation">
+  <a href="index.html" class="nav-logo">
+    <div class="nav-logo-mark">
+      <svg viewBox="0 0 14 14" aria-hidden="true">
+        <rect x="1" y="1" width="5" height="5" rx="1"/>
+        <rect x="8" y="1" width="5" height="5" rx="1"/>
+        <rect x="1" y="8" width="5" height="5" rx="1"/>
+        <rect x="8" y="8" width="5" height="5" rx="1"/>
+      </svg>
+    </div>
+    Term Sheet Playbook
+  </a>
+  <a href="index.html" class="nav-back">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to site
+  </a>
+</nav>
+
+<!-- ARTICLE HEADER -->
+<header class="article-header">
+  <div class="article-header-inner">
+    <span class="article-chip">Indian VC Law · Product Engineering</span>
+    <h1>Building a Legal Research Tool for Indian Term Sheets</h1>
+    <p class="article-deck">
+      Why founders using ChatGPT get Indian law wrong, how a RAG-based term sheet playbook was built in two weeks, and the technical architecture that makes it work.
+    </p>
+    <div class="article-byline">
+      <div class="byline-avatar" aria-label="Jyotirmoy Nath">JN</div>
+      <div>
+        <div class="byline-name">Jyotirmoy Nath</div>
+        <div class="byline-meta">Corporate Lawyer · 26 June 2026 · 8 min read</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ARTICLE BODY -->
+<div class="article-body-wrap">
+  <article class="article-body" aria-label="Article content">
+
+    <h2>Background</h2>
+
+    <p>
+      Founders increasingly rely on ChatGPT to understand term sheets before their first call with their law firm. The problem: generic AI tools cite foreign law, outdated guidance, or unsupported market practice. Founders end up in kickoff meetings without proper grounding in Indian law, asking their lawyers to untangle incorrect information.
+    </p>
+
+    <h2>The tool</h2>
+
+    <p>
+      A RAG-based legal research tool for Indian PE/VC term sheet negotiations, grounded in Companies Act 2013 and FEMA legislation. Founders can browse key clauses like liquidation preference, anti-dilution and drag-along, or query specific negotiating positions and get structured, India-specific answers covering founder and investor counsel perspectives, market practice, and red flags. The playbook handles the foundation and the lawyer handles everything above it.
+    </p>
+
+    <h2>How it was built</h2>
+
+    <p>
+      I built this in two weeks on the free version of Claude. No engineering background, no budget. I worked in sessions timed around the usage limits, starting at 8am, then again around 2pm, then in the evening.
+    </p>
+
+    <p>
+      The work ran in two parallel threads: one for the knowledge base, researching, curating, and encoding how Indian term sheet clauses are actually negotiated; and one for the front end, building an interface where the information is easy to find and read. Debugging happened by taking screenshots and dropping them into Claude chat.
+    </p>
+
+    <p>
+      But the technical choices matter more than the timeline. Here is what shaped the architecture:
+    </p>
+
+    <div class="tech-box">
+      <h3>Stack: Next.js + OpenAI API + Structured Database</h3>
+      <p><strong>Frontend:</strong> Next.js and React with TypeScript. This runs on Vercel with zero DevOps overhead.</p>
+      <p><strong>Backend:</strong> Next.js API routes. API calls to OpenAI stay server-side, so no client-side API keys are exposed in the browser.</p>
+      <p><strong>Knowledge Base:</strong> Around 50 Indian PE/VC clause chunks structured as TypeScript objects, not vectors. Each chunk has title, keywords, legal flags, risk level, founder/investor positions, and market practice.</p>
+      <p><strong>LLM:</strong> OpenAI's <code>gpt-4o-mini</code>. A smaller model works here because retrieval is deterministic. The LLM only answers from the chunks passed to it, no independent research required.</p>
+    </div>
+
+    <h2>Technical Architecture: Why These Choices Matter</h2>
+
+    <p>
+      A RAG system has three stages: retrieval, ranking, and generation. Most implementations spend cycles optimising for semantic similarity through embeddings and cosine distance. This system took a different path.
+    </p>
+
+    <h3 style="font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: var(--olive); margin-top: 1.5em; margin-bottom: 0.8em;">Structured data over vectors</h3>
+
+    <p>
+      The knowledge base is a TypeScript object array. Each clause chunk has explicit fields: <code>title</code>, <code>keywords</code>, <code>legalFlag</code>, <code>marketStandard</code>, <code>risk</code> level (critical/high/medium/low). This structure means every field can be used for retrieval and filtering.
+    </p>
+
+    <p>
+      Why not embeddings? Because a lawyer asking "Is this market standard?" needs a deterministic answer, not a fuzzy similarity score. A lawyer also needs to see why the system surfaced a given clause. Embeddings are a black box. Keyword scores are transparent.
+    </p>
+
+    <h3 style="font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: var(--olive); margin-top: 1.5em; margin-bottom: 0.8em;">Keyword-based search with scoring</h3>
+
+    <p>
+      When a lawyer queries "liquidation," the retrieval function scores clauses on:
+    </p>
+
+    <ul class="tech-list">
+      <li><strong>Title match (+10 points):</strong> "Liquidation Preference" scores highest.</li>
+      <li><strong>Keyword match (+5 points):</strong> Pre-indexed keywords like "waterfall," "preferred," "1x," "payout" boost relevance.</li>
+     
+      <li><strong>Legal flag match (+3 points):</strong> This clause surfaces statutory context. The <code>lp-002</code> <code>legalFlag</code> references Section 43 and Section 55 of the Companies Act, 2013 read with Rule 9 of the Companies (Share Capital and Debentures) Rules 2014, which is the operative provision governing the issue of participating preference shares, and requires corresponding Articles of Association amendments.</li>
+
+      <li><strong>Risk level boost (+1–2 points):</strong> Critical and high-risk clauses rank higher because lawyers need to see them first.</li>
+    </ul>
+
+    <p>
+      The top 5 matches are passed to the LLM as context. Latency is sub-100ms. A lawyer asking "Is put option enforceable in India?" gets the FEMA NDI Rules constraint immediately because it is tagged in the <code>legalFlag</code> field. No embeddings, no API calls, no latency.
+    </p>
+
+    <h3 style="font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: var(--olive); margin-top: 1.5em; margin-bottom: 0.8em;">Next.js for fast deployment</h3>
+
+    <p>
+      The backend is a Next.js API route: a single endpoint that takes a query and mode (founder or investor) and returns a JSON response with structured advice. Vercel deploys this with sub-100ms cold start. When a lawyer clicks "Ask," they get a response in under 2 seconds.
+    </p>
+
+    <p>
+      Barrier to adoption drops when tools do not make you wait. If the tool took 5 seconds per query, junior associates would use ChatGPT instead. Speed forces good architecture.
+    </p>
+
+    <h3 style="font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: var(--olive); margin-top: 1.5em; margin-bottom: 0.8em;">Role-based system prompts</h3>
+
+    <p>
+      The LLM gets two different system prompts depending on mode:
+    </p>
+
+    <p>
+      <strong>Founder counsel mode:</strong> "You are a senior corporate lawyer at Trilegal acting as FOUNDER COUNSEL for a Seed or Series A funding round in India. Your job is to protect the founders' interests..."
+    </p>
+
+    <p>
+      <strong>Investor counsel mode:</strong> "You are a senior corporate lawyer at Trilegal acting as INVESTOR COUNSEL for a Seed or Series A funding round in India. Your job is to protect the investor's interests..."
+    </p>
+
+    <p>
+      The same clause chunk returns different negotiating advice depending on perspective. A liquidation preference is flagged as "critical risk" in founder counsel mode and "acceptable baseline" in investor counsel mode. This trains founders to understand both perspectives before they walk into their law firm's office, which is exactly what good preparation requires.
+    </p>
+
+    <h2>Why RAG (And Not Just General AI)</h2>
+
+    <p>
+      Ask ChatGPT "Is a put option enforceable in Indian term sheets?" and it draws on training data from UK case law, US contract law, and generic fintech guidance. The answer is plausible but wrong. Indian law on this point is governed by the pricing guidelines under Rule 21(2)(c) of the NDI Rules 2019. A put option providing an absolute guaranteed exit price higher than FMV at the time of exercise violates those guidelines. A capped-IRR structure is permissible provided the payout at exercise does not exceed FMV at that point. The valuation must be certified by a SEBI-registered Merchant Banker or a Chartered Accountant.
+    </p>
+
+    <blockquote>
+      Generic tools guess. RAG systems retrieve and acknowledge when they do not know.
+    </blockquote>
+
+    <p>
+      The Playbook works differently. When queried, it:
+    </p>
+
+    <ul class="tech-list">
+      <li><strong>Retrieves</strong> the relevant clause chunk on put options, which is tagged with references to Rule 21(2)(c) of the NDI Rules 2019 and the dual-track drafting requirement for mixed foreign and domestic investor rounds.</li>
+      <li><strong>Passes only that chunk</strong> as context to the LLM.</li>
+      <li><strong>The LLM generates an answer</strong> grounded in that chunk, with citations to Indian law.</li>
+      <li><strong>If the query falls outside the knowledge base,</strong> the system returns "not covered in our knowledge base" instead of hallucinating.</li>
+    </ul>
+
+    <p>
+      That honest boundary matters. A tool that acknowledges its limits is more useful to a practitioner than one that confidently answers questions outside its scope.
+    </p>
+
+    <h2>Limitations: What This Architecture Trades Off</h2>
+
+    <p>
+      This design prioritises speed and transparency over breadth. The knowledge base is hand-curated, which means:
+    </p>
+
+    <p>
+      <strong>Strength:</strong> High quality for what is covered. Every clause is vetted against Indian law and market practice. When the system has an answer, it is accurate and grounded.
+    </p>
+
+    <p>
+      <strong>Weakness:</strong> Gaps exist. If a clause type is not in the database, say a novel instrument introduced post-June 2026 or a highly specialised tax structure, the system returns "not covered." Scaling would require either manual curation by domain experts, which is sustainable but slow, or a hybrid approach where core clauses are maintained manually, ancillary content is auto-ingested, and RAG is used for novelty detection. That is considerably more complex to build.
+    </p>
+
+    <p>
+      For now, the tool is intentionally narrow: term sheet clauses only, not SHA/SSA/CPA mechanics, not M&A precedent, not regulatory compliance checklists. Narrowness prevents hallucination. Breadth without depth is where RAG systems fail.
+    </p>
+
+    <h2>What comes next</h2>
+
+    <p>
+      The constraints here were deliberate. Free tools, no budget, two weeks. The knowledge base is limited to what I could research and encode alone.
+    </p>
+
+    <p>
+      A version built on a firm's institutional knowledge would look different: more clauses, more depth on multi-investor scenarios, integration with SHA templates and precedent documentation, and usage analytics to identify gaps and friction points.
+    </p>
+
+    <p>
+      Founders do not need AI to replace lawyers. They need AI to handle the foundation, understand the structure, and ground themselves in Indian law before they call their lawyer, so the conversation focuses on strategy and negotiation.
+    </p>
+
+  </article>
+</div>
+
+<!-- ARTICLE FOOTER STRIP -->
+<div class="article-footer-strip">
+  <p>
+    Built for founders who need to understand their term sheet before their law firm kickoff.
+  </p>
+  <a href="index.html#contact" class="btn-primary">Get in touch</a>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Term Sheet Playbook</div>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="https://termsheet-playbook.vercel.app/" target="_blank" rel="noopener">Demo</a>
+    <a href="index.html#contact">Contact</a>
+  </div>
+  <div class="footer-note">Built by a practitioner. Grounded in Indian law. Not legal advice. © 2026 Jyotirmoy Nath</div>
+</footer>
+
+</body>
+</html>
